@@ -1,13 +1,17 @@
 import requests
 
+def get_user_repos(username: str, token: str = None):
 
-def get_user_repos(username: str):
+    headers = {
+        "Accept": "application/vnd.github+json"
+    }
+
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     response = requests.get(
         f"https://api.github.com/users/{username}/repos",
-        headers={
-            "Accept": "application/vnd.github+json"
-        }
+        headers=headers
     )
 
     return response.json()

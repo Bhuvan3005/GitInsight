@@ -1,13 +1,13 @@
 import requests
 import base64
+
 from services.llm_service import generate_analysis
 
 
-
-
-def analyze_repository(owner: str, repo: str):
+def analyze_repository(owner: str, repo: str, token: str):
 
     headers = {
+        "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json"
     }
 
@@ -17,6 +17,11 @@ def analyze_repository(owner: str, repo: str):
         headers=headers
     )
 
+    if repo_response.status_code != 200:
+        return {
+            "error": repo_response.json()
+        }
+
     repo_info = repo_response.json()
 
     # Languages
@@ -25,7 +30,10 @@ def analyze_repository(owner: str, repo: str):
         headers=headers
     )
 
-    languages = lang_response.json()
+    languages = {}
+
+    if lang_response.status_code == 200:
+        languages = lang_response.json()
 
     # README
     readme_response = requests.get(
@@ -36,15 +44,23 @@ def analyze_repository(owner: str, repo: str):
     readme_text = ""
 
     if readme_response.status_code == 200:
+
         readme_data = readme_response.json()
 
         if "content" in readme_data:
+
             readme_text = base64.b64decode(
                 readme_data["content"]
-            ).decode("utf-8", errors="ignore")
+            ).decode(
+                "utf-8",
+                errors="ignore"
+            )
 
     # File Tree
-    default_branch = repo_info.get("default_branch", "main")
+    default_branch = repo_info.get(
+        "default_branch",
+        "main"
+    )
 
     tree_response = requests.get(
         f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1",
@@ -54,6 +70,7 @@ def analyze_repository(owner: str, repo: str):
     files = []
 
     if tree_response.status_code == 200:
+
         tree_data = tree_response.json()
 
         files = [
@@ -62,7 +79,6 @@ def analyze_repository(owner: str, repo: str):
             if item["type"] == "blob"
         ]
 
-    # Build Context for LLM
     context = {
         "repository_name": repo_info.get("name"),
         "description": repo_info.get("description"),
@@ -73,6 +89,10 @@ def analyze_repository(owner: str, repo: str):
         "readme": readme_text[:5000],
         "files": files[:200]
     }
+
+    print("========== CONTEXT ==========")
+    print(context)
+    print("=============================")
 
     report = generate_analysis(context)
 
